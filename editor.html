@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -52,6 +53,8 @@
   legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px;}
   .bm-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;}
   .bm-row .bm-label{width:78px;font-size:12px;font-weight:600;flex-shrink:0;}
+  .bm-card{border:1px solid var(--border);border-radius:8px;padding:8px;margin-bottom:8px;}
+  .bm-color-swatch{width:38px;height:38px;padding:2px;border:1px solid var(--border);border-radius:8px;flex-shrink:0;cursor:pointer;}
   .checkbox-row{display:flex;align-items:center;gap:8px;margin-top:12px;}
   .checkbox-row input{width:auto;}
   .checkbox-row label{margin:0;}
@@ -125,6 +128,8 @@ const SECTION_DEFS = [
       {key:'kickoff', label:'Kickoff Time', type:'time'},
       {key:'home', label:'Home Team', type:'text', required:true},
       {key:'away', label:'Away Team', type:'text', required:true},
+      {key:'homeLogo', label:'Home Team Logo (optional)', type:'image'},
+      {key:'awayLogo', label:'Away Team Logo (optional)', type:'image'},
       {key:'league', label:'League', type:'text'},
       {key:'category', label:'Category (for site filters)', type:'select', options:CATEGORIES},
       {key:'selection', label:'Selection / Pick', type:'text', required:true},
@@ -163,7 +168,20 @@ const SECTION_DEFS = [
       {key:'publishAt', label:'Publish at (Africa/Lagos)', type:'schedule'},
     ],
     title:i=>i.match||'Match',
-    subtitle:i=>`Score ${i.score||'?'}${i.odds?' | Odds '+i.odds:''}`
+    subtitle:i=>`Score ${i.score||'?'}${i.odds?' | Odds '+i.odds:''}`,
+    demoSeed:()=>{
+      const examples = [
+        {match:'Real Madrid vs Barcelona', league:'La Liga', score:'2-1', odds:9.5, rating:8},
+        {match:'Liverpool vs Chelsea', league:'Premier League', score:'1-1', odds:7.0, rating:6},
+        {match:'Bayern Munich vs Dortmund', league:'Bundesliga', score:'3-1', odds:11.0, rating:7},
+      ];
+      const bmKeys = (state.data.meta.bookmakers||DEFAULT_BOOKMAKERS).map(b=>b.key);
+      return examples.map(ex=>{
+        const bookmakers = {};
+        bmKeys.forEach(k=> bookmakers[k] = {odds: ex.odds, code: `DEMO-${k.toUpperCase()}-CS-${uid().slice(1,5).toUpperCase()}`});
+        return {id: uid(), date:new Date().toISOString().slice(0,10), status:'published', publishAt:'', bookmakers, ...ex};
+      });
+    }
   },
   {key:'codesOnly', label:'Codes Only', icon:'🔑', color:'#f5a623', hasBookmakers:true,
     fields:[
@@ -479,9 +497,10 @@ function renderHome(){
 function renderSectionList(def){
   const items = state.data[def.key] || [];
   const addBtn = `<button class="btn btn-green" id="addItemBtn" style="margin-bottom:14px">+ Add ${def.label.replace(/s$/,'')}</button>`;
+  const demoBtn = def.demoSeed ? `<button class="btn btn-outline btn-sm" id="demoSeedBtn" style="margin-bottom:14px">✨ Add 3 Demo Examples</button>` : '';
   const bmOrder = (state.data.meta.bookmakers||[]).map(b=>b.key);
   if(items.length===0){
-    app.innerHTML = addBtn + `<div class="empty">No ${def.label.toLowerCase()} yet.</div>`;
+    app.innerHTML = addBtn + demoBtn + `<div class="empty">No ${def.label.toLowerCase()} yet.</div>`;
   } else {
     const cards = items.map((item, idx)=>{
       const badges = def.hasBookmakers && item.bookmakers
@@ -500,9 +519,17 @@ function renderSectionList(def){
         </div>
       </div>`;
     }).join('');
-    app.innerHTML = addBtn + cards;
+    app.innerHTML = addBtn + demoBtn + cards;
   }
   document.getElementById('addItemBtn').onclick = ()=>{ state.view.itemId='new'; render(); };
+  if(def.demoSeed){
+    document.getElementById('demoSeedBtn').onclick = ()=>{
+      if(!state.data[def.key]) state.data[def.key] = [];
+      state.data[def.key].push(...def.demoSeed());
+      state.dirty = true; saveDraft(); render();
+      toast('Demo examples added — edit them or just Publish as-is');
+    };
+  }
   app.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{ state.view.itemId=b.dataset.edit; render(); });
   app.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{
     if(confirm('Delete this item? It will be removed from the site next time you Publish.')){
@@ -675,10 +702,17 @@ function renderSettings(){
     </div>
     <div class="card">
       <label style="margin-top:0">Bookmakers</label>
+      <p class="hint" style="margin-top:0">Color and affiliate link here control what visitors see and where clicking a bookmaker's odds takes them on the live site.</p>
       <div id="bmList">${(state.data?.meta?.bookmakers||DEFAULT_BOOKMAKERS).map((b,i)=>`
-        <div class="bm-row"><input type="text" data-bm-key="${i}" value="${b.key}" placeholder="key" style="width:35%">
-        <input type="text" data-bm-name="${i}" value="${b.name||b.label||''}" placeholder="Name" style="width:50%">
-        <button type="button" data-bm-del="${i}" class="btn btn-red btn-sm">✕</button></div>`).join('')}
+        <div class="bm-card">
+          <div class="bm-row">
+            <input type="color" data-bm-color="${i}" value="${b.color||'#465066'}" class="bm-color-swatch">
+            <input type="text" data-bm-key="${i}" value="${b.key}" placeholder="key" style="width:28%">
+            <input type="text" data-bm-name="${i}" value="${b.name||b.label||''}" placeholder="Name" style="flex:1">
+            <button type="button" data-bm-del="${i}" class="btn btn-red btn-sm">✕</button>
+          </div>
+          <input type="text" data-bm-affiliate="${i}" value="${b.affiliateUrl||''}" placeholder="Affiliate link (https://...)" style="margin-top:6px">
+        </div>`).join('')}
       </div>
       <button class="btn btn-outline btn-sm" id="addBmBtn" style="margin-top:6px">+ Add bookmaker</button>
     </div>
@@ -711,7 +745,7 @@ function renderSettings(){
 
   if(state.data){
     document.getElementById('addBmBtn').onclick = ()=>{
-      state.data.meta.bookmakers.push({key:'newbook', name:'New Bookmaker'});
+      state.data.meta.bookmakers.push({key:'newbook', name:'New Bookmaker', color:'#465066', affiliateUrl:''});
       state.dirty = true; saveDraft(); render();
     };
     app.querySelectorAll('[data-bm-key]').forEach(inp=>inp.onchange = e=>{
@@ -720,6 +754,14 @@ function renderSettings(){
     });
     app.querySelectorAll('[data-bm-name]').forEach(inp=>inp.onchange = e=>{
       state.data.meta.bookmakers[+inp.dataset.bmName].name = e.target.value.trim();
+      state.dirty = true; saveDraft();
+    });
+    app.querySelectorAll('[data-bm-color]').forEach(inp=>inp.onchange = e=>{
+      state.data.meta.bookmakers[+inp.dataset.bmColor].color = e.target.value;
+      state.dirty = true; saveDraft();
+    });
+    app.querySelectorAll('[data-bm-affiliate]').forEach(inp=>inp.onchange = e=>{
+      state.data.meta.bookmakers[+inp.dataset.bmAffiliate].affiliateUrl = e.target.value.trim();
       state.dirty = true; saveDraft();
     });
     app.querySelectorAll('[data-bm-del]').forEach(btn=>btn.onclick = ()=>{
