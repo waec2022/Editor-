@@ -227,7 +227,16 @@ const SECTION_DEFS = [
       {key:'publishAt', label:'Publish at (Africa/Lagos)', type:'schedule'},
     ],
     title:i=>i.match||'Match',
-    subtitle:i=>`${i.pick||''}${i.odds?' | Odds '+i.odds:''}`
+    subtitle:i=>`${i.pick||''}${i.odds?' | Odds '+i.odds:''}`,
+    demoSeed:()=>{
+      const bmKeys = (state.data.meta.bookmakers||DEFAULT_BOOKMAKERS).map(b=>b.key);
+      return [{
+        id: uid(), match:'Real Madrid vs Barcelona', market:'Match Winner', pick:'Home Win',
+        odds:1.85, bookmaker: bmKeys[0]||'bet9ja', photo:'',
+        description:'Our most confident selection of the day based on current form and head-to-head record.',
+        date:new Date().toISOString().slice(0,10), rating:9, status:'published', publishAt:'',
+      }];
+    }
   },
   {key:'results', label:'Results', icon:'📊', color:'#0aa2a2', hasBookmakers:false,
     fields:[
@@ -717,6 +726,14 @@ function renderSettings(){
       <button class="btn btn-outline btn-sm" id="addBmBtn" style="margin-top:6px">+ Add bookmaker</button>
     </div>
     <div class="card">
+      <label style="margin-top:0">Site Branding</label>
+      <label>Site Name</label><input type="text" id="brandName" value="${state.data?.meta?.branding?.siteName||'Sure2OddToday'}">
+      <label>Tagline</label><input type="text" id="brandTagline" value="${state.data?.meta?.branding?.tagline||'Daily Football Tips & Bet Codes'}">
+      <label>Domain</label><input type="text" id="brandDomain" value="${state.data?.meta?.branding?.domain||'sure2oddtoday.online'}">
+      <button class="btn btn-blue btn-sm" id="saveBranding" style="margin-top:10px">Save branding</button>
+      <p class="hint">Once saved and published, the site name and tagline update everywhere automatically (header, browser tab title, footer) — no more manual edits needed for a rename.</p>
+    </div>
+    <div class="card">
       <label style="margin-top:0">Today's Overview (shown on homepage)</label>
       <label>Winners (yesterday)</label><input type="text" id="ovWinners" value="${state.data?.meta?.overview?.statWinners||''}">
       <label>Losers (yesterday)</label><input type="text" id="ovLosers" value="${state.data?.meta?.overview?.statLosers||''}">
@@ -768,6 +785,15 @@ function renderSettings(){
       state.data.meta.bookmakers.splice(+btn.dataset.bmDel,1);
       state.dirty = true; saveDraft(); render();
     });
+    document.getElementById('saveBranding').onclick = ()=>{
+      state.data.meta.branding = {
+        siteName: document.getElementById('brandName').value.trim(),
+        tagline: document.getElementById('brandTagline').value.trim(),
+        domain: document.getElementById('brandDomain').value.trim(),
+      };
+      state.dirty = true; saveDraft();
+      toast('Branding saved locally — tap Publish to push it live');
+    };
     document.getElementById('saveOverview').onclick = ()=>{
       state.data.meta.overview = {
         ...(state.data.meta.overview||{}),
