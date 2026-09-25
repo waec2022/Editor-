@@ -137,6 +137,7 @@ const SECTION_DEFS = [
       {key:'rating', label:'Rating (1-10)', type:'number'},
       {key:'status', label:'Status', type:'select', options:['draft','scheduled','published','cancelled']},
       {key:'publishAt', label:'Publish at (Africa/Lagos)', type:'schedule'},
+      {key:'expiresAt', label:'Expires at (Africa/Lagos)', type:'expireSchedule'},
     ],
     title:i=>`${i.home||'Home'} vs ${i.away||'Away'}`,
     subtitle:i=>`${i.selection||''}${i.odds?' | Odds '+i.odds:''}${i.league?' · '+i.league:''}`
@@ -152,6 +153,7 @@ const SECTION_DEFS = [
       {key:'rating', label:'Rating (1-10)', type:'number'},
       {key:'status', label:'Status', type:'select', options:['draft','scheduled','published','cancelled']},
       {key:'publishAt', label:'Publish at (Africa/Lagos)', type:'schedule'},
+      {key:'expiresAt', label:'Expires at (Africa/Lagos)', type:'expireSchedule'},
     ],
     title:i=>i.title||'Accumulator',
     subtitle:i=>`${(i.selections||[]).length} selections${i.totalOdds?' | Total '+i.totalOdds:''}`
@@ -166,6 +168,7 @@ const SECTION_DEFS = [
       {key:'rating', label:'Rating (1-10)', type:'number'},
       {key:'status', label:'Status', type:'select', options:['draft','scheduled','published','cancelled']},
       {key:'publishAt', label:'Publish at (Africa/Lagos)', type:'schedule'},
+      {key:'expiresAt', label:'Expires at (Africa/Lagos)', type:'expireSchedule'},
     ],
     title:i=>i.match||'Match',
     subtitle:i=>`Score ${i.score||'?'}${i.odds?' | Odds '+i.odds:''}`,
@@ -192,6 +195,7 @@ const SECTION_DEFS = [
       {key:'rating', label:'Rating (1-10)', type:'number'},
       {key:'status', label:'Status', type:'select', options:['draft','scheduled','published','cancelled']},
       {key:'publishAt', label:'Publish at (Africa/Lagos)', type:'schedule'},
+      {key:'expiresAt', label:'Expires at (Africa/Lagos)', type:'expireSchedule'},
     ],
     title:i=>i.label||'Code',
     subtitle:i=>`${Object.keys(i.bookmakers||{}).length} bookmaker codes${i.odds?' | Odds '+i.odds:''}`
@@ -208,6 +212,7 @@ const SECTION_DEFS = [
       {key:'rating', label:'Rating (1-10)', type:'number'},
       {key:'status', label:'Status', type:'select', options:['draft','published','cancelled']},
       {key:'publishAt', label:'Publish at (Africa/Lagos)', type:'schedule'},
+      {key:'expiresAt', label:'Expires at (Africa/Lagos)', type:'expireSchedule'},
     ],
     title:i=>i.match||'Match',
     subtitle:i=>`${i.pick||''}${i.minute?' · '+i.minute:''}`
@@ -225,6 +230,7 @@ const SECTION_DEFS = [
       {key:'rating', label:'Rating (1-10)', type:'number'},
       {key:'status', label:'Status', type:'select', options:['draft','scheduled','published','cancelled']},
       {key:'publishAt', label:'Publish at (Africa/Lagos)', type:'schedule'},
+      {key:'expiresAt', label:'Expires at (Africa/Lagos)', type:'expireSchedule'},
     ],
     title:i=>i.match||'Match',
     subtitle:i=>`${i.pick||''}${i.odds?' | Odds '+i.odds:''}`,
@@ -264,6 +270,7 @@ const SECTION_DEFS = [
       {key:'featured', label:'Featured', type:'checkbox'},
       {key:'status', label:'Status', type:'select', options:['draft','scheduled','published','archived']},
       {key:'publishAt', label:'Publish at (Africa/Lagos)', type:'schedule'},
+      {key:'expiresAt', label:'Expires at (Africa/Lagos)', type:'expireSchedule'},
     ],
     title:i=>i.title||'News item',
     subtitle:i=>(i.date||'')
@@ -298,6 +305,18 @@ function scheduleStatusLabel(publishAt){
   if(hrs < 24) return `Publishes in ${hrs}h`;
   const days = Math.round(hrs/24);
   return days===1 ? 'Publishes tomorrow' : `Publishes in ${days}d`;
+}
+function expiryStatusLabel(expiresAt){
+  if(!expiresAt) return 'Never expires';
+  const t = new Date(expiresAt).getTime();
+  const diffMs = t - Date.now();
+  if(diffMs <= 0) return 'Expired — hidden on site';
+  const mins = Math.round(diffMs/60000);
+  if(mins < 60) return `Expires in ${mins}m`;
+  const hrs = Math.round(mins/60);
+  if(hrs < 24) return `Expires in ${hrs}h`;
+  const days = Math.round(hrs/24);
+  return days===1 ? 'Expires tomorrow' : `Expires in ${days}d`;
 }
 function toast(msg){
   const t=document.createElement('div'); t.className='toast'; t.textContent=msg;
@@ -521,6 +540,7 @@ function renderSectionList(def){
         <div class="title">${idx+1}. ${escapeHtml(def.title(item))}</div>
         <div class="meta">${escapeHtml(def.subtitle(item))}</div>
         ${item.publishAt ? `<div class="meta">🕒 ${escapeHtml(scheduleStatusLabel(item.publishAt))}</div>` : ''}
+        ${item.expiresAt ? `<div class="meta">⏳ ${escapeHtml(expiryStatusLabel(item.expiresAt))}</div>` : ''}
         ${badges?`<div class="badges">${badges}</div>`:''}
         <div class="row">
           <button class="btn btn-blue btn-sm" data-edit="${item.id}">Edit</button>
@@ -579,19 +599,21 @@ function renderForm(def, itemId){
         </div>
         <p class="hint">Choose a photo from your phone. Stored directly with this item — keep photos small (under ~500KB) so publishing stays fast.</p>`;
     }
-    if(f.type==='schedule'){
+    if(f.type==='schedule' || f.type==='expireSchedule'){
       const localVal = val ? String(val).slice(0,16) : '';
+      const isExpire = f.type==='expireSchedule';
+      const presets = isExpire
+        ? [['360','+6h'],['720','+12h'],['1440','+24h'],['4320','+3d'],['10080','+7d']]
+        : [['0','Now'],['15','+15m'],['30','+30m'],['60','+1h'],['120','+2h'],['tomorrow9','Tomorrow 9am']];
       return `<label>${f.label}</label>
-        <input type="datetime-local" name="${f.key}" value="${escapeHtml(localVal)}">
-        <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap">
-          <button type="button" class="btn btn-outline btn-sm" data-sched="0">Now</button>
-          <button type="button" class="btn btn-outline btn-sm" data-sched="15">+15m</button>
-          <button type="button" class="btn btn-outline btn-sm" data-sched="30">+30m</button>
-          <button type="button" class="btn btn-outline btn-sm" data-sched="60">+1h</button>
-          <button type="button" class="btn btn-outline btn-sm" data-sched="120">+2h</button>
-          <button type="button" class="btn btn-outline btn-sm" data-sched="tomorrow9">Tomorrow 9am</button>
+        <div class="schedule-field-group">
+          <input type="datetime-local" name="${f.key}" value="${escapeHtml(localVal)}">
+          <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap">
+            ${presets.map(([v,l])=>`<button type="button" class="btn btn-outline btn-sm" data-sched="${v}">${l}</button>`).join('')}
+            ${isExpire ? `<button type="button" class="btn btn-outline btn-sm" data-sched-clear="1">Never expire</button>` : ''}
+          </div>
         </div>
-        <p class="hint">Times are Africa/Lagos. Leave blank to publish immediately.</p>`;
+        <p class="hint">${isExpire ? 'Times are Africa/Lagos. This item automatically stops showing on the site once this time passes. Leave blank to never expire.' : 'Times are Africa/Lagos. Leave blank to publish immediately.'}</p>`;
     }
     return `<label>${f.label}${f.required?' *':''}</label><input type="${f.type}" name="${f.key}" step="${f.step||''}" placeholder="${f.placeholder||''}" value="${escapeHtml(val)}">`;
   }).join('');
@@ -618,8 +640,13 @@ function renderForm(def, itemId){
 
   app.querySelectorAll('[data-sched]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
-      const input = btn.closest('form').querySelector('input[type=datetime-local]');
+      const input = btn.closest('.schedule-field-group').querySelector('input[type=datetime-local]');
       input.value = btn.dataset.sched === 'tomorrow9' ? lagosTomorrow9am() : lagosDateTimeLocal(Number(btn.dataset.sched)*60000);
+    });
+  });
+  app.querySelectorAll('[data-sched-clear]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      btn.closest('.schedule-field-group').querySelector('input[type=datetime-local]').value = '';
     });
   });
 
@@ -659,7 +686,7 @@ function renderForm(def, itemId){
           const [match,pick,odds] = l.split('|').map(s=>s && s.trim());
           return {match:match||'', pick:pick||'', odds:odds||''};
         });
-      } else if(f.type==='schedule'){
+      } else if(f.type==='schedule' || f.type==='expireSchedule'){
         const raw = fd.get(f.key);
         item[f.key] = raw ? `${raw}:00+01:00` : '';
       } else if(f.type==='checkbox'){
