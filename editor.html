@@ -204,8 +204,8 @@ const SECTION_DEFS = [
     fields:[
       {key:'match', label:'Match', type:'text', required:true},
       {key:'league', label:'League', type:'text'},
-      {key:'currentScore', label:'Current Score', type:'text', placeholder:'1-0'},
-      {key:'minute', label:"Minute / Status", type:'text', placeholder:"e.g. 34' or HT"},
+      {key:'kickoffAt', label:'Match Kickoff (Africa/Lagos)', type:'schedule'},
+      {key:'currentScore', label:'Current Score (update manually as it changes)', type:'text', placeholder:'1-0'},
       {key:'pick', label:'Pick', type:'text', required:true},
       {key:'odds', label:'Odds', type:'number', step:'0.01'},
       {key:'date', label:'Date', type:'date'},
@@ -215,7 +215,7 @@ const SECTION_DEFS = [
       {key:'expiresAt', label:'Expires at (Africa/Lagos)', type:'expireSchedule'},
     ],
     title:i=>i.match||'Match',
-    subtitle:i=>`${i.pick||''}${i.minute?' · '+i.minute:''}`
+    subtitle:i=>`${i.pick||''}${i.kickoffAt?' · '+liveMatchStatusLabel(i.kickoffAt):''}`
   },
   {key:'betOfDay', label:'Bet of the Day', icon:'⭐', color:'#ffb100', hasBookmakers:false,
     fields:[
@@ -318,6 +318,16 @@ function expiryStatusLabel(expiresAt){
   const days = Math.round(hrs/24);
   return days===1 ? 'Expires tomorrow' : `Expires in ${days}d`;
 }
+// Mirrors the exact calculation script.js uses on the public site, so the
+// editor's status can never contradict what a visitor actually sees.
+function liveMatchStatusLabel(kickoffAt){
+  if(!kickoffAt) return 'No kickoff set';
+  const kickoffMs = new Date(kickoffAt).getTime();
+  const diffMin = (Date.now() - kickoffMs) / 60000;
+  if(diffMin < 0) return 'UPCOMING';
+  if(diffMin >= 90) return 'LIVE ENDED';
+  return `LIVE • ${Math.min(90, Math.floor(diffMin) + 1)}'`;
+}
 function toast(msg){
   const t=document.createElement('div'); t.className='toast'; t.textContent=msg;
   document.body.appendChild(t); setTimeout(()=>t.remove(), 2400);
@@ -409,8 +419,58 @@ async function connectAndLoad(){
   }
 }
 
+// Checks the dataset right before it goes to GitHub. Returns an array of
+// specific, human-readable problems — never a generic "invalid data".
+function validateData(data){
+  const errors = [];
+  const label = (item, idx) => item.id || `#${idx+1}`;
+
+  (data.predictions||[]).forEach((p,i)=>{
+    if(!p.home || !p.away) errors.push(`Prediction ${label(p,i)} is missing a home or away team.`);
+    if(!p.selection) errors.push(`Prediction ${label(p,i)} is missing a selection.`);
+    if(!p.odds) errors.push(`Prediction ${label(p,i)} is missing odds.`);
+  });
+  (data.accumulators||[]).forEach((a,i)=>{
+    if(!a.title) errors.push(`Accumulator ${label(a,i)} is missing a title.`);
+    if(!a.selections || !a.selections.length) errors.push(`Accumulator ${label(a,i)} has no selections.`);
+  });
+  (data.correctScores||[]).forEach((c,i)=>{
+    if(!c.match) errors.push(`Correct Score item ${label(c,i)} is missing a match.`);
+    if(!c.score) errors.push(`Correct Score item ${label(c,i)} is missing a score.`);
+  });
+  (data.livePredictions||[]).forEach((l,i)=>{
+    if(!l.match) errors.push(`Live Prediction ${label(l,i)} is missing a match.`);
+    if(!l.kickoffAt) errors.push(`Live Prediction ${label(l,i)} has no kickoff time set.`);
+  });
+  (data.codesOnly||[]).forEach((c,i)=>{
+    if(!c.label) errors.push(`Codes Only item ${label(c,i)} is missing a label.`);
+  });
+  (data.betOfDay||[]).forEach((b,i)=>{
+    if(!b.match || !b.pick) errors.push(`Bet of the Day item ${label(b,i)} is missing a match or pick.`);
+  });
+  (data.news||[]).forEach((n,i)=>{
+    if(!n.title) errors.push(`News item ${label(n,i)} is missing a title.`);
+  });
+  // publishAt must never be mistaken for a kickoff time, and vice versa —
+  // catch the specific mix-up rather than a vague "invalid date".
+  [...(data.predictions||[]), ...(data.correctScores||[]), ...(data.livePredictions||[])].forEach((item,i)=>{
+    if(item.publishAt && isNaN(new Date(item.publishAt).getTime())) errors.push(`${label(item,i)} has an invalid Publish At value.`);
+    if(item.expiresAt && isNaN(new Date(item.expiresAt).getTime())) errors.push(`${label(item,i)} has an invalid Expire At value.`);
+  });
+  (data.livePredictions||[]).forEach((l,i)=>{
+    if(l.kickoffAt && isNaN(new Date(l.kickoffAt).getTime())) errors.push(`Live Prediction ${label(l,i)} has an invalid Kickoff value.`);
+  });
+
+  return errors;
+}
+
 async function publish(commitMessage){
   if(!state.connected){ toast('Connect first'); return; }
+  const problems = validateData(state.data);
+  if(problems.length){
+    alert(`Publish stopped — fix these first:\n\n${problems.slice(0,8).join('\n')}${problems.length>8 ? `\n...and ${problems.length-8} more.` : ''}`);
+    return;
+  }
   const {branch} = state.config;
   const content = b64EncodeUnicode(JSON.stringify(state.data, null, 2));
   const body = { message: commitMessage || 'Update data.json via Sure2OddToday Editor', content, branch };
