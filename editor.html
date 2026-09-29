@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -798,7 +797,7 @@ function renderSettings(){
     </div>
     <div class="card">
       <label style="margin-top:0">Bookmakers</label>
-      <p class="hint" style="margin-top:0">Color and affiliate link here control what visitors see and where clicking a bookmaker's odds takes them on the live site.</p>
+      <p class="hint" style="margin-top:0">Color, links and codes here control what visitors see and where each bookmaker's buttons take them on the live site.</p>
       <div id="bmList">${(state.data?.meta?.bookmakers||DEFAULT_BOOKMAKERS).map((b,i)=>`
         <div class="bm-card">
           <div class="bm-row">
@@ -807,7 +806,12 @@ function renderSettings(){
             <input type="text" data-bm-name="${i}" value="${b.name||b.label||''}" placeholder="Name" style="flex:1">
             <button type="button" data-bm-del="${i}" class="btn btn-red btn-sm">✕</button>
           </div>
-          <input type="text" data-bm-affiliate="${i}" value="${b.affiliateUrl||''}" placeholder="Affiliate link (https://...)" style="margin-top:6px">
+          <label style="margin:8px 0 2px">Main site link (existing customers go here)</label>
+          <input type="text" data-bm-main="${i}" value="${b.mainUrl||''}" placeholder="https://bet9ja.com">
+          <label style="margin:8px 0 2px">Referral/affiliate link (new signups go here)</label>
+          <input type="text" data-bm-affiliate="${i}" value="${b.affiliateUrl||''}" placeholder="https://bet9ja.com/ref/yourcode">
+          <label style="margin:8px 0 2px">Promo/signup code (optional — NOT a booking code)</label>
+          <input type="text" data-bm-promo="${i}" value="${b.promoCode||''}" placeholder="e.g. WELCOME100">
         </div>`).join('')}
       </div>
       <button class="btn btn-outline btn-sm" id="addBmBtn" style="margin-top:6px">+ Add bookmaker</button>
@@ -849,7 +853,7 @@ function renderSettings(){
 
   if(state.data){
     document.getElementById('addBmBtn').onclick = ()=>{
-      state.data.meta.bookmakers.push({key:'newbook', name:'New Bookmaker', color:'#465066', affiliateUrl:''});
+      state.data.meta.bookmakers.push({key:'newbook', name:'New Bookmaker', color:'#465066', mainUrl:'', affiliateUrl:'', promoCode:''});
       state.dirty = true; saveDraft(); render();
     };
     app.querySelectorAll('[data-bm-key]').forEach(inp=>inp.onchange = e=>{
@@ -866,6 +870,14 @@ function renderSettings(){
     });
     app.querySelectorAll('[data-bm-affiliate]').forEach(inp=>inp.onchange = e=>{
       state.data.meta.bookmakers[+inp.dataset.bmAffiliate].affiliateUrl = e.target.value.trim();
+      state.dirty = true; saveDraft();
+    });
+    app.querySelectorAll('[data-bm-main]').forEach(inp=>inp.onchange = e=>{
+      state.data.meta.bookmakers[+inp.dataset.bmMain].mainUrl = e.target.value.trim();
+      state.dirty = true; saveDraft();
+    });
+    app.querySelectorAll('[data-bm-promo]').forEach(inp=>inp.onchange = e=>{
+      state.data.meta.bookmakers[+inp.dataset.bmPromo].promoCode = e.target.value.trim();
       state.dirty = true; saveDraft();
     });
     app.querySelectorAll('[data-bm-del]').forEach(btn=>btn.onclick = ()=>{
