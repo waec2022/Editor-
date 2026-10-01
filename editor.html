@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -121,6 +122,32 @@ const DEFAULT_BOOKMAKERS = [
 const CATEGORIES = ['Over/Under','BTTS','Match Winner','Double Chance','Other'];
 
 const SECTION_DEFS = [
+  {key:'hedgeStrategies', label:'Hedge Strategy', icon:'⚡', color:'#2ecc58', hasBookmakers:false,
+    fields:[
+      {key:'match', label:'Match', type:'text', required:true, placeholder:'Arsenal vs Chelsea'},
+      {key:'kickoffAt', label:'Kickoff Date/Time (Africa/Lagos)', type:'schedule'},
+      {key:'preMatchSelection', label:'Pre-match Selection (Step 1)', type:'text', required:true, placeholder:'Under 0.5 Goals'},
+      {key:'entryMinute', label:"Entry Minute (Step 2, e.g. 20)", type:'number'},
+      {key:'requiredScore', label:'Required Score (Step 2)', type:'text', placeholder:'0-0'},
+      {key:'liveSelection', label:'Live Selection (Step 3)', type:'text', required:true, placeholder:'Over 0.5 Goals'},
+      {key:'odds', label:'Odds (optional)', type:'number', step:'0.01'},
+      {key:'date', label:'Date', type:'date'},
+      {key:'status', label:'Status', type:'select', options:['draft','scheduled','published','cancelled']},
+      {key:'publishAt', label:'Publish at (Africa/Lagos)', type:'schedule'},
+      {key:'expiresAt', label:'Expires at (Africa/Lagos)', type:'expireSchedule'},
+    ],
+    title:i=>i.match||'Match',
+    subtitle:i=>`${i.preMatchSelection||''} → ${i.liveSelection||''}`,
+    demoSeed:()=>{
+      const now = Date.now();
+      return [{
+        id: uid(), match:'Arsenal vs Chelsea',
+        kickoffAt: new Date(now + 24*60*60*1000).toISOString().slice(0,16) + ':00+01:00',
+        preMatchSelection:'Under 0.5 Goals', entryMinute:20, requiredScore:'0-0', liveSelection:'Over 0.5 Goals',
+        odds:'', date:new Date().toISOString().slice(0,10), status:'published', publishAt:'', expiresAt:'',
+      }];
+    }
+  },
   {key:'predictions', label:'Predictions', icon:'⚽', color:'#2ecc58', hasBookmakers:true,
     fields:[
       {key:'date', label:'Date', type:'date'},
@@ -441,6 +468,11 @@ function validateData(data){
     if(!l.match) errors.push(`Live Prediction ${label(l,i)} is missing a match.`);
     if(!l.kickoffAt) errors.push(`Live Prediction ${label(l,i)} has no kickoff time set.`);
   });
+  (data.hedgeStrategies||[]).forEach((h,i)=>{
+    if(!h.match) errors.push(`Hedge Strategy ${label(h,i)} is missing a match.`);
+    if(!h.preMatchSelection) errors.push(`Hedge Strategy ${label(h,i)} is missing its pre-match selection.`);
+    if(!h.liveSelection) errors.push(`Hedge Strategy ${label(h,i)} is missing its live selection.`);
+  });
   (data.codesOnly||[]).forEach((c,i)=>{
     if(!c.label) errors.push(`Codes Only item ${label(c,i)} is missing a label.`);
   });
@@ -452,9 +484,12 @@ function validateData(data){
   });
   // publishAt must never be mistaken for a kickoff time, and vice versa —
   // catch the specific mix-up rather than a vague "invalid date".
-  [...(data.predictions||[]), ...(data.correctScores||[]), ...(data.livePredictions||[])].forEach((item,i)=>{
+  [...(data.predictions||[]), ...(data.correctScores||[]), ...(data.livePredictions||[]), ...(data.hedgeStrategies||[])].forEach((item,i)=>{
     if(item.publishAt && isNaN(new Date(item.publishAt).getTime())) errors.push(`${label(item,i)} has an invalid Publish At value.`);
     if(item.expiresAt && isNaN(new Date(item.expiresAt).getTime())) errors.push(`${label(item,i)} has an invalid Expire At value.`);
+  });
+  (data.hedgeStrategies||[]).forEach((h,i)=>{
+    if(h.kickoffAt && isNaN(new Date(h.kickoffAt).getTime())) errors.push(`Hedge Strategy ${label(h,i)} has an invalid Kickoff value.`);
   });
   (data.livePredictions||[]).forEach((l,i)=>{
     if(l.kickoffAt && isNaN(new Date(l.kickoffAt).getTime())) errors.push(`Live Prediction ${label(l,i)} has an invalid Kickoff value.`);
